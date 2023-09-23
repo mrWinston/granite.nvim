@@ -1,4 +1,5 @@
 local mod = require("granite.todo")
+local bufutils = require("granite.buffer")
 ---@class NoteTemplate
 ---@field name string Name of the template
 ---@field template_path string Path to the template file
@@ -74,91 +75,35 @@ M.get_all_todos = function()
 	return mod.scan_todos(M.config.knowledge_base_path, M.config.todo_tag)
 end
 
----filter todo's that are not done yet
----@param todos Todo[]
----@return Todo[]
-M.filter_not_done = function(todos)
-	local newTodos = {}
-	for _, todo in pairs(todos) do
-		if todo.state ~= NOTE_STATE.DONE then
-			table.insert(newTodos, todo)
-		end
-	end
-	return newTodos
-end
-
----filter todo's that are done
----@param todos Todo[]
----@return Todo[]
-M.filter_done = function(todos)
-	local newTodos = {}
-	for _, todo in pairs(todos) do
-		if todo.state == NOTE_STATE.DONE then
-			table.insert(newTodos, todo)
-		end
-	end
-	return newTodos
-end
-
 M.open_note = function()
 	require("telescope.builtin").find_files({
 		cwd = M.config.knowledge_base_path,
-    find_command = {"fd", "md$"},
+		find_command = { "fd", "md$" },
 	})
 end
 
 M.link_to_file = function()
 	local actions = require("telescope.actions")
 	local action_state = require("telescope.actions.state")
-	local current_buffer_name = vim.fn.expand("%:p:h")
-	local row, col = unpack(vim.api.nvim_win_get_cursor(0))
-	local curBuf = vim.api.nvim_get_current_buf()
+
+	local current_buffer = vim.api.nvim_get_current_buf()
+	local current_window = vim.api.nvim_get_current_win()
+
 	require("telescope.builtin").find_files({
 		cwd = M.config.knowledge_base_path,
-    find_command = {"fd", "md$"},
+		find_command = { "fd", "md$" },
 		attach_mappings = function(prompt_bufnr, map)
 			actions.select_default:replace(function()
 				actions.close(prompt_bufnr)
 				local selection = action_state.get_selected_entry()
-				local fullpath = string.format("%s/%s", selection.cwd, selection[1])
-				local relto = current_buffer_name
+				local target_path = string.format("%s/%s", selection.cwd, selection[1])
 
-				local out = vim.system(
-					{ "zsh", "-c", string.format("realpath --relative-to=%s %s", relto, fullpath) },
-					{ text = true }
-				):wait()
-
-				vim.api.nvim_buf_set_text(
-					curBuf,
-					row - 1,
-					col,
-					row - 1,
-					col,
-					{ string.format("[](%s)", out.stdout:gsub("[\n\r]", "")) }
-				)
+				local relative_path = bufutils.get_buffer_relative_path(current_buffer, target_path)
+				bufutils.write_at_cursor(current_window, string.format("[](%s)", relative_path))
 			end)
 			return true
 		end,
 	})
-end
-
----filter todo's that are done
----@param todos Todo[]
----@return Todo[]
-M.filter_due_today = function(todos)
-	local newTodos = {}
-	local today = os.time({ year = os.date("*t").year, month = os.date("*t").month, day = os.date("*t").day })
-	for _, todo in pairs(todos) do
-		if todo.due_date then
-			local matchpattern = "(%d+)%-(%d+)%-(%d+)"
-			local due_year, due_month, due_day = todo.due_date:match(matchpattern)
-			local due_time = os.time({ year = due_year, month = due_month, day = due_day })
-			if due_time == today then
-				table.insert(newTodos, todo)
-			end
-		end
-	end
-	return newTodos
 end
 
 return M
