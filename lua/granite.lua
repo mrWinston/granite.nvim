@@ -43,10 +43,16 @@ M.new_note_from_template = a.void(function()
 	end)
   ---@type NoteTemplate
 	local selected = rx()
-	vim.print(selected)
+
+  -- validate template path
+  local full_template_path = vim.fs.normalize(vim.fs.joinpath(M.config.knowledge_base_path, selected.template_path))
+  if vim.fn.filereadable(full_template_path) == 0 then
+    error(string.format("Template file '%s' can't be read.", full_template_path))
+  end
+
   local parameters = {"filename", table.unpack(selected.parameters)}
 
-  opts = {}
+  local opts = {}
 
 	for _, param in ipairs(parameters) do
 		tx, rx = a.control.channel.oneshot()
@@ -58,9 +64,10 @@ M.new_note_from_template = a.void(function()
 	end
 
   opts["parent_file_path"] = vim.api.nvim_buf_get_name(0)
-  local tpl_string = granite_tpl.render_template(selected.template_path)
-
-  vim.print(opts)
+  local tpl_string = granite_tpl.render_template(full_template_path, opts)
+  local outpath = vim.fs.normalize(vim.fs.joinpath(M.config.knowledge_base_path, selected.create_folder, opts.filename))
+  vim.fn.writefile(vim.split(tpl_string, "\n"), outpath, "")
+  vim.cmd("tabnew " .. outpath)
 end)
 
 M.Note = function()
