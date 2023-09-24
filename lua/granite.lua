@@ -1,7 +1,11 @@
 local mod = require("granite.todo")
 local bufutils = require("granite.buffer")
+local granite_telescope = require("granite.telescope")
+local granite_tpl = require("granite.templating")
+local a = require("plenary.async")
 ---@class NoteTemplate
 ---@field name string Name of the template
+---@field parameters string[]? parameters for the
 ---@field template_path string Path to the template file
 ---@field create_folder string Where to create the template
 
@@ -31,6 +35,33 @@ M.config = config
 M.setup = function(args)
 	M.config = vim.tbl_deep_extend("force", M.config, args or {})
 end
+
+M.new_note_from_template = a.void(function()
+	local tx, rx = a.control.channel.oneshot()
+	granite_telescope.choose_template(M.config.templates, function(selected)
+		tx(selected)
+	end)
+  ---@type NoteTemplate
+	local selected = rx()
+	vim.print(selected)
+  local parameters = {"filename", table.unpack(selected.parameters)}
+
+  opts = {}
+
+	for _, param in ipairs(parameters) do
+		tx, rx = a.control.channel.oneshot()
+		vim.ui.input({ prompt = "Enter Value for " .. param }, function(input)
+			tx(input)
+		end)
+    local value = rx()
+    opts[param] = value
+	end
+
+  opts["parent_file_path"] = vim.api.nvim_buf_get_name(0)
+  local tpl_string = granite_tpl.render_template(selected.template_path)
+
+  vim.print(opts)
+end)
 
 M.Note = function()
 	vim.ui.input({ prompt = "Note name:" }, function(input)
