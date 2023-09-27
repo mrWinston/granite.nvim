@@ -6,13 +6,13 @@ local a = require("plenary.async")
 ---@class NoteTemplate
 ---@field name string Name of the template
 ---@field parameters string[]? parameters for the
----@field template_path string Path to the template file
----@field create_folder string Where to create the template
+---@field path string Path to the template file
+---@field output_folder string Where to create the template
+---@field filename_template string? If set, use this template as the filename instead of asking
 
 ---@class Config
 ---@field knowledge_base_path string? Path to the knowledge base folder
----@field templates NoteTemplate[]? Templates
----@field default_note_folder string? Templates
+---@field template_config string Templates
 ---@field todo_tag string? Tag for todo items
 
 ---@type Config
@@ -20,6 +20,7 @@ local config = {
 	knowledge_base_path = "~/knowledge",
 	default_note_folder = "notes",
 	templates = {},
+	template_config = "",
 	todo_tag = "#task",
 }
 
@@ -38,36 +39,42 @@ end
 
 M.new_note_from_template = a.void(function()
 	local tx, rx = a.control.channel.oneshot()
-	granite_telescope.choose_template(M.config.templates, function(selected)
+	local full_template_config_path =
+		vim.fs.normalize(vim.fs.joinpath(M.config.knowledge_base_path, M.config.template_config))
+	local templates = granite_tpl.get_templates_from_config(full_template_config_path)
+	granite_telescope.choose_template(templates, function(selected)
 		tx(selected)
 	end)
-  ---@type NoteTemplate
+	---@type NoteTemplate
 	local selected = rx()
 
-  -- validate template path
-  local full_template_path = vim.fs.normalize(vim.fs.joinpath(M.config.knowledge_base_path, selected.template_path))
-  if vim.fn.filereadable(full_template_path) == 0 then
-    error(string.format("Template file '%s' can't be read.", full_template_path))
-  end
+	-- validate template path
+	local full_template_path = vim.fs.normalize(vim.fs.joinpath(M.config.knowledge_base_path, selected.path))
+	if vim.fn.filereadable(full_template_path) == 0 then
+		error(string.format("Template file '%s' can't be read.", full_template_path))
+	end
 
-  local parameters = {"filename", table.unpack(selected.parameters)}
 
-  local opts = {}
+	local opts = {}
+  local parameters = {}
+	parameters = { "filename", table.unpack(selected.parameters) }
+
 
 	for _, param in ipairs(parameters) do
 		tx, rx = a.control.channel.oneshot()
 		vim.ui.input({ prompt = "Enter Value for " .. param }, function(input)
 			tx(input)
 		end)
-    local value = rx()
-    opts[param] = value
+		local value = rx()
+		opts[param] = value
 	end
 
-  opts["parent_file_path"] = vim.api.nvim_buf_get_name(0)
-  local tpl_string = granite_tpl.render_template(full_template_path, opts)
-  local outpath = vim.fs.normalize(vim.fs.joinpath(M.config.knowledge_base_path, selected.create_folder, opts.filename))
-  vim.fn.writefile(vim.split(tpl_string, "\n"), outpath, "")
-  vim.cmd("tabnew " .. outpath)
+	opts["parent_file_path"] = vim.api.nvim_buf_get_name(0)
+	local tpl_string = granite_tpl.render_template(full_template_path, opts)
+	local outpath =
+		vim.fs.normalize(vim.fs.joinpath(M.config.knowledge_base_path, selected.output_folder, opts.filename))
+	vim.fn.writefile(vim.split(tpl_string, "\n"), outpath, "")
+	vim.cmd("tabnew " .. outpath)
 end)
 
 M.Note = function()
@@ -135,8 +142,10 @@ M.link_to_file = function()
 				actions.close(prompt_bufnr)
 				local selection = action_state.get_selected_entry()
 				local target_path = string.format("%s/%s", selection.cwd, selection[1])
+        vim.print(target_path)
 
 				local relative_path = bufutils.get_buffer_relative_path(current_buffer, target_path)
+        vim.print(relative_path)
 				bufutils.write_at_cursor(current_window, string.format("[](%s)", relative_path))
 			end)
 			return true

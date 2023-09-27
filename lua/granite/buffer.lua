@@ -10,9 +10,9 @@ M.write_at_cursor = function(winnr, text)
 end
 
 M.get_buffer_relative_path = function(bufnr, target)
-	local relative_to = vim.api.nvim_buf_get_name(bufnr)
+	local relative_to = vim.fs.dirname(vim.api.nvim_buf_get_name(bufnr))
 	local out = vim.system(
-		{ "zsh", "-c", string.format("realpath --relative-to=%s %s", relative_to, target) },
+		{ "zsh", "-c", string.format("realpath --relative-to='%s' '%s'", relative_to, target) },
 		{ text = true }
 	)
 		:wait()

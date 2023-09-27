@@ -11,7 +11,7 @@ return require("telescope").register_extension({
 		-- access extension config and user config
 	end,
 	exports = {
-		granite = function(opts)
+		granite_telescope = function(opts)
 			opts = opts or {}
 			pickers
 				.new(opts, {

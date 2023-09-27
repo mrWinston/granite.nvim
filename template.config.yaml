@@ -1,0 +1,8 @@
+---
+- name: meeting
+  path: ./templates/bla
+  parameters:
+    - title
+    - tags
+    - thingies
+  output_folder: "meets"
