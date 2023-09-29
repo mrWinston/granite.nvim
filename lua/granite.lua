@@ -97,7 +97,6 @@ M.new_note_from_template = a.void(function()
 	end
 	opts["parent_file_path"] = vim.api.nvim_buf_get_name(0)
 
-  vim.fn.
 
 	local tpl_string = granite_tpl.render_template(full_template_path, opts)
 	local outpath =
