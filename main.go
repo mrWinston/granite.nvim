@@ -333,13 +333,7 @@ type InitArgs struct {
 	LogLevel    string `json:",omitempty"`
 }
 
-type DailyConfig struct {
-	Template string `json:"template" yaml:"template"`
-	Folder   string `json:"folder"   yaml:"folder"`
-}
-
 type GraniteConfig struct {
-	Dailies   *DailyConfig      `json:"dailies"   yaml:"dailies"`
 	Templates []*TemplateConfig `json:"templates" yaml:"templates"`
 	TodoTag   string
 }
