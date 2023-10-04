@@ -11,20 +11,11 @@ local a = require("plenary.async")
 ---@field filename_template string? If set, use this template as the filename instead of asking
 
 ---@class Config
----@field knowledge_base_path string? Path to the knowledge base folder
----@field template_config string Templates
----@field todo_tag string? Tag for todo items
+---@field granite_yaml string? Path to the granite_yaml file in knowledge base root
 
 ---@type Config?
-local config = {
-	knowledge_base_path = "~/knowledge",
-	default_note_folder = "notes",
-	templates = {},
-	template_config = "",
-	todo_tag = "#task",
-}
+local config = {}
 
----@class Knowledge
 local M = {}
 
 ---@type Config?
@@ -54,93 +45,40 @@ M.setup = function(args)
     \ {'type': 'function', 'name': 'GraniteGetTemplates', 'sync': 1, 'opts': {}},
     \ {'type': 'function', 'name': 'GraniteGetTodos', 'sync': 1, 'opts': {}},
     \ {'type': 'function', 'name': 'GraniteInit', 'sync': 1, 'opts': {}},
+    \ {'type': 'function', 'name': 'GraniteRenderTemplate', 'sync': 1, 'opts': {}},
     \ ])
   ]])
 
 	local goConfig = {
-		RootPath = vim.fs.normalize(M.config.knowledge_base_path),
-		TodoTag = M.config.todo_tag,
-		TemplateConfigPath = M.config.template_config,
+		GraniteYaml = M.config.granite_yaml,
 		LogLevel = "debug",
 	}
 	vim.fn.GraniteInit(vim.fn.json_encode(goConfig))
 end
 
 M.new_note_from_template = a.void(function()
-	local tx, rx = a.control.channel.oneshot()
-	local full_template_config_path =
-		vim.fs.normalize(vim.fs.joinpath(M.config.knowledge_base_path, M.config.template_config))
-	local templates = granite_tpl.get_templates_from_config(full_template_config_path)
-	granite_telescope.choose_template(templates, function(selected)
-		tx(selected)
-	end)
+	local templates = vim.fn.json_decode(vim.fn.GraniteGetTemplates())
 	---@type NoteTemplate
-	local selected = rx()
-
-	-- validate template path
-	local full_template_path = vim.fs.normalize(vim.fs.joinpath(M.config.knowledge_base_path, selected.path))
-	if vim.fn.filereadable(full_template_path) == 0 then
-		error(string.format("Template file '%s' can't be read.", full_template_path))
-	end
+	local selectedTemplate = a.wrap(granite_telescope.choose_template, 2)(templates)
 
 	local opts = {}
 	local parameters = {}
-	parameters = { "filename", table.unpack(selected.parameters) }
+	if selectedTemplate.filename_template and selectedTemplate.filename_template ~= "" then
+		parameters = { table.unpack(selectedTemplate.parameters) }
+	else
+		parameters = { "filename", table.unpack(selectedTemplate.parameters) }
+	end
 
 	for _, param in ipairs(parameters) do
-		tx, rx = a.control.channel.oneshot()
-		vim.ui.input({ prompt = "Enter Value for " .. param }, function(input)
-			tx(input)
-		end)
-		local value = rx()
-		opts[param] = value
+		opts[param] = a.wrap(vim.ui.input, 2)({ prompt = "Enter Value for " .. param })
 	end
+
 	opts["parent_file_path"] = vim.api.nvim_buf_get_name(0)
 
+	local outpath = vim.fn.GraniteRenderTemplate(vim.fn.json_encode(selectedTemplate), vim.fn.json_encode(opts))
 
-	local tpl_string = granite_tpl.render_template(full_template_path, opts)
-	local outpath =
-		vim.fs.normalize(vim.fs.joinpath(M.config.knowledge_base_path, selected.output_folder, opts.filename))
-	vim.fn.writefile(vim.split(tpl_string, "\n"), outpath, "")
 	vim.cmd("tabnew " .. outpath)
 end)
-
-M.Note = function()
-	vim.ui.input({ prompt = "Note name:" }, function(input)
-		if not input then
-			return
-		end
-		if not string.match(input, ".md$") then
-			input = input .. ".md"
-		end
-		local fullpath = string.format(
-			"%s/%s/%s",
-			vim.fs.normalize(M.config.knowledge_base_path),
-			vim.fs.normalize(M.config.default_note_folder),
-			input
-		)
-		vim.cmd("tabnew " .. fullpath)
-	end)
-end
-
-M.scan = function()
-	local todos = mod.scan_todos(M.config.knowledge_base_path, M.config.todo_tag)
-
-	vim.fn.setqflist(todos, "r")
-	vim.cmd("copen")
-end
-
----
----@param filter fun(filter: Todo[]): Todo[]
-M.show_tasks = function(filter)
-	local todos = mod.scan_todos(M.config.knowledge_base_path, M.config.todo_tag)
-	if filter then
-		todos = filter(todos)
-	end
-
-	vim.fn.setqflist(todos, "r")
-	vim.cmd("copen")
-end
 
 ---Returns all todos found
 ---@return Todo[]
@@ -149,9 +87,10 @@ M.get_all_todos = function()
 	return all_todos
 end
 
+-- TODO: Let this search for files returned by golang only
 M.open_note = function()
 	require("telescope.builtin").find_files({
-		cwd = M.config.knowledge_base_path,
+		cwd = vim.fs.dirname(M.config.granite_yaml),
 		find_command = { "fd", "md$" },
 	})
 end
@@ -164,9 +103,9 @@ M.link_to_file = function()
 	local current_window = vim.api.nvim_get_current_win()
 
 	require("telescope.builtin").find_files({
-		cwd = M.config.knowledge_base_path,
+		cwd = vim.fs.dirname(M.config.granite_yaml),
 		find_command = { "fd", "md$" },
-		attach_mappings = function(prompt_bufnr, map)
+		attach_mappings = function(prompt_bufnr)
 			actions.select_default:replace(function()
 				actions.close(prompt_bufnr)
 				local selection = action_state.get_selected_entry()
