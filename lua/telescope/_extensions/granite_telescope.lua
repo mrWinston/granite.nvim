@@ -12,45 +12,48 @@ return require("telescope").register_extension({
 	end,
 	exports = {
 		granite_telescope = function(opts)
-			opts = opts or {}
+			opts = opts or {
+				states = { "OPEN", "IN_PROGRESS" },
+			}
+      vim.print(opts)
 			pickers
 				.new(opts, {
 					prompt_title = "todos",
 					finder = finders.new_table({
-						results = granite.get_all_todos(),
+						results = granite.get_all_todos(opts),
 						entry_maker = function(entry)
-							return {
-								value = entry,
-								display = entry.text,
-								ordinal = entry.text,
-							}
+								return {
+									value = entry,
+									display = entry.text,
+									ordinal = entry.text,
+								}
 						end,
 					}),
 					sorter = conf.generic_sorter(opts),
 					attach_mappings = function(prompt_bufnr, map)
 						actions.select_default:replace(function()
 							local selection = action_state.get_selected_entry()
-		          actions.close(prompt_bufnr)
-              vim.cmd("e ".. selection.value.filename)
-              vim.cmd(tostring(selection.value.lnum))
+							actions.close(prompt_bufnr)
+							vim.cmd("e " .. selection.value.filename)
+							vim.cmd(tostring(selection.value.lnum))
 						end)
 						actions.file_tab:replace(function()
 							local selection = action_state.get_selected_entry()
-		          actions.close(prompt_bufnr)
-              vim.cmd("tabnew ".. selection.value.filename)
-              vim.cmd(tostring(selection.value.lnum))
+							actions.close(prompt_bufnr)
+							vim.cmd("tabnew " .. selection.value.filename)
+							vim.cmd(tostring(selection.value.lnum))
 						end)
 						actions.file_split:replace(function()
 							local selection = action_state.get_selected_entry()
-		          actions.close(prompt_bufnr)
-              vim.cmd("split ".. selection.value.filename)
-              vim.cmd(tostring(selection.value.lnum))
+							actions.close(prompt_bufnr)
+							vim.cmd("split " .. selection.value.filename)
+							vim.cmd(tostring(selection.value.lnum))
 						end)
 						actions.file_vsplit:replace(function()
 							local selection = action_state.get_selected_entry()
-		          actions.close(prompt_bufnr)
-              vim.cmd("vsplit ".. selection.value.filename)
-              vim.cmd(tostring(selection.value.lnum))
+							actions.close(prompt_bufnr)
+							vim.cmd("vsplit " .. selection.value.filename)
+							vim.cmd(tostring(selection.value.lnum))
 						end)
 						return true
 					end,
